@@ -1,4 +1,6 @@
 /*
+ * Copyright (c) 2020 Aaron Coburn and individual contributors
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -35,10 +37,7 @@ import org.trellisldp.auth.oauth.NullAuthenticator;
 import org.trellisldp.auth.oauth.OAuthFilter;
 import org.trellisldp.auth.oauth.OAuthUtils;
 import org.trellisldp.cache.TrellisCache;
-import org.trellisldp.dropwizard.config.AuthConfiguration;
-import org.trellisldp.dropwizard.config.CORSConfiguration;
-import org.trellisldp.dropwizard.config.JwtAuthConfiguration;
-import org.trellisldp.dropwizard.config.TrellisConfiguration;
+import org.trellisldp.dropwizard.config.*;
 import org.trellisldp.webac.WebAcService;
 
 /**
@@ -46,22 +45,31 @@ import org.trellisldp.webac.WebAcService;
  */
 final class TrellisUtils {
 
-    public static Authenticator getJwtAuthenticator(final JwtAuthConfiguration config) {
+    public static Authenticator getJwtAuthenticator(final TrellisConfiguration config) {
+        final JwtAuthConfiguration jwtConfig = config.getAuth().getJwt();
         final Authenticator jwksAuthenticator = OAuthUtils.buildAuthenticatorWithJwk(
-                config.getJwks());
+                jwtConfig.getJwks());
         if (jwksAuthenticator != null) {
             return jwksAuthenticator;
         }
 
         final Authenticator keystoreAuthenticator = OAuthUtils.buildAuthenticatorWithTruststore(
-                config.getKeyStore(), config.getKeyStorePassword().toCharArray(), config.getKeyIds());
+                jwtConfig.getKeyStore(), jwtConfig.getKeyStorePassword().toCharArray(), jwtConfig.getKeyIds());
         if (keystoreAuthenticator != null) {
             return keystoreAuthenticator;
         }
 
-        final Authenticator sharedKeyAuthenticator = OAuthUtils.buildAuthenticatorWithSharedSecret(config.getKey());
+        final Authenticator sharedKeyAuthenticator = OAuthUtils.buildAuthenticatorWithSharedSecret(jwtConfig.getKey());
         if (sharedKeyAuthenticator != null) {
             return sharedKeyAuthenticator;
+        }
+
+        final WebIdOIDCConfiguration webIdOIDC = jwtConfig.getWebIdOIDC();
+        final Authenticator webIdOIDCAuthenticator =
+                OAuthUtils.buildAuthenticatorWithWebIdOIDC(webIdOIDC.getEnabled(), config.getBaseUrl(),
+                        webIdOIDC.getCacheSize(), webIdOIDC.getCacheExpireDays());
+        if (webIdOIDCAuthenticator != null) {
+            return webIdOIDCAuthenticator;
         }
 
         return new NullAuthenticator();
@@ -92,7 +100,7 @@ final class TrellisUtils {
         final Set<String> admins = new HashSet<>(config.getAuth().getAdminUsers());
 
         if (auth.getJwt().getEnabled()) {
-            filters.add(new OAuthFilter(getJwtAuthenticator(auth.getJwt()), realm, admins));
+            filters.add(new OAuthFilter(getJwtAuthenticator(config), realm, admins));
         }
 
         if (auth.getBasic().getEnabled() && auth.getBasic().getUsersFile() != null) {

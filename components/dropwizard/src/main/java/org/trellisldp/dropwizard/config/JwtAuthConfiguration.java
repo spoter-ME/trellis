@@ -1,4 +1,6 @@
 /*
+ * Copyright (c) 2020 Aaron Coburn and individual contributors
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -39,6 +41,8 @@ public class JwtAuthConfiguration {
 
     @NotNull
     private List<String> keyIds = emptyList();
+
+    private WebIdOIDCConfiguration webIdOIDC = new WebIdOIDCConfiguration();
 
     /**
      * Get whether basic authentication has been enabled.
@@ -146,5 +150,23 @@ public class JwtAuthConfiguration {
     @JsonProperty
     public void setJwks(final String jwks) {
         this.jwks = jwks;
+    }
+
+    /**
+     * Get the WebId OIDC configuration.
+     * @return the configuration object
+     */
+    @JsonProperty
+    public WebIdOIDCConfiguration getWebIdOIDC() {
+        return webIdOIDC;
+    }
+
+    /**
+     * Set the WebId OIDC configuration.
+     * @param webIdOIDC the configuration object
+     */
+    @JsonProperty
+    public void setWebIdOIDC(final WebIdOIDCConfiguration webIdOIDC) {
+        this.webIdOIDC = webIdOIDC;
     }
 }

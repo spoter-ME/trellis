@@ -1,4 +1,6 @@
 /*
+ * Copyright (c) 2020 Aaron Coburn and individual contributors
+ *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -15,14 +17,21 @@ package org.trellisldp.auth.oauth;
 
 import static io.jsonwebtoken.security.Keys.hmacShaKeyFor;
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.util.Collections.emptyList;
+import static java.util.Collections.emptyMap;
+import static java.util.stream.Collectors.collectingAndThen;
+import static java.util.stream.Collectors.toMap;
 import static org.slf4j.LoggerFactory.getLogger;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.io.Deserializer;
+import io.jsonwebtoken.jackson.io.JacksonDeserializer;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.math.BigInteger;
+import java.net.URL;
 import java.nio.file.Files;
 import java.security.Key;
 import java.security.KeyFactory;
@@ -33,9 +42,9 @@ import java.security.Principal;
 import java.security.cert.CertificateException;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.RSAPublicKeySpec;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.*;
 
+import org.apache.commons.io.IOUtils;
 import org.slf4j.Logger;
 
 public final class OAuthUtils {
@@ -163,6 +172,11 @@ public final class OAuthUtils {
         return null;
     }
 
+    public static Authenticator buildAuthenticatorWithWebIdOIDC(final boolean enabled, final String baseUrl,
+                                                                final int cacheSize, final int cacheExpireDays) {
+        return enabled ? new WebIdOIDCAuthenticator(baseUrl, cacheSize, cacheExpireDays) : null;
+    }
+
     private static List<String> filterKeyIds(final KeyStore ks, final List<String> keyids) throws KeyStoreException {
         final List<String> ids = new ArrayList<>();
         for (final String id : keyids) {
@@ -181,6 +195,44 @@ public final class OAuthUtils {
      */
     private static boolean isUrl(final String url) {
         return url.startsWith("http://") || url.startsWith("https://");
+    }
+
+    /**
+     * Fetches the key configurations from the given location and returns it in a keyId -> Key Map.
+     * @param location string of the URL
+     * @return Map containing the key configurations
+     */
+    static Map<String, Key> fetchKeys(final String location) {
+        // TODO eventually, this will become part of the JJWT library
+        final Deserializer<Map<String, List<Map<String, String>>>> deserializer = new JacksonDeserializer<>();
+        try (final InputStream input = new URL(location).openStream()) {
+            return deserializer.deserialize(IOUtils.toByteArray(input)).getOrDefault("keys", emptyList()).stream()
+                    .map(OAuthUtils::buildKeyEntry).filter(Objects::nonNull).collect(collectingAndThen(
+                            toMap(Map.Entry::getKey, Map.Entry::getValue), Collections::unmodifiableMap));
+        } catch (final IOException ex) {
+            LOGGER.error(String.format("Error fetching/parsing jwk document at location %s", location), ex);
+        }
+        return emptyMap();
+    }
+
+    private static Map.Entry<String, Key> buildKeyEntry(final Map<String, String> jwk) {
+        final Key key = buildKey(jwk.get("n"), jwk.get("e"));
+        if (key != null && jwk.containsKey("kid")) {
+            return new AbstractMap.SimpleEntry<>(jwk.get("kid"), key);
+        }
+        return null;
+    }
+
+    /**
+     * Builds a public key from its parameters as encoded as base64.
+     * @param n modulus
+     * @param e exponent
+     * @return the key
+     */
+    static Key buildKey(final String n, final String e) {
+        final BigInteger modulus = new BigInteger(1, Base64.getUrlDecoder().decode(n));
+        final BigInteger exponent = new BigInteger(1, Base64.getUrlDecoder().decode(e));
+        return OAuthUtils.buildRSAPublicKey("RSA", modulus, exponent);
     }
 
     private OAuthUtils() {
