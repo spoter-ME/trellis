@@ -115,7 +115,7 @@ public class WebAcFilter implements ContainerRequestFilter, ContainerResponseFil
     public static final String SESSION_WEBAC_MODES = "trellis.webac.session-modes";
 
     private static final Logger LOGGER = getLogger(WebAcFilter.class);
-    private static final Set<String> readable = new HashSet<>(asList("GET", "HEAD", "OPTIONS"));
+    private static final Set<String> readable = new HashSet<>(asList("GET", "HEAD"));
     private static final Set<String> writable = new HashSet<>(asList("PUT", "PATCH", "DELETE"));
     private static final Set<String> appendable = new HashSet<>(singletonList("POST"));
     private static final RDF rdf = RDFFactory.getInstance();
